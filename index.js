@@ -1,52 +1,99 @@
-var readline = require('readline');
-let historicStoriesPerSprint = [7, 8, 10, 10, 12, 12, 6, 5, 11, 7, 10, 13, 7, 20, 12, 11, 9, 12, 5, 22, 12, 14, 17, 13, 10, 18, 21, 9];
-//let historicStoriesPerSprint = [6,2,9,0,8,8,10,5,7,10];
-let sprintIterationsFinal = [];
+const { NumberPrompt } = require("enquirer");
+const csv = require("csv-parser");
+const fs = require("fs");
 
-const MAX = 10000;
-const NEW_TASK_EVERY_10 = 3;
+const MAX_ROUNDS = 10000;
+const NEW_TASK_EVERY_10 = 3; // For every 10 tasks created, how many tasks are added to the sprint after it started?
 
-const rl = readline.createInterface({
-    input: process.stdin,
-    output: process.stdout
-});
+function simulateSprint(targetNumberOfStories, historicStoryPointsPerSprint, sprintAllocation) {
+	let storyPoints = targetNumberOfStories;
+	let sprintIterations = 0;
+	while (storyPoints > 0) {
+		storyPoints =
+			storyPoints -
+			sprintAllocation *
+				historicStoryPointsPerSprint[
+					Math.floor(Math.random() * historicStoryPointsPerSprint.length)
+				];
+		sprintIterations++;
+	}
+	return sprintIterations;
+}
 
-rl.question('What is the target number of stories? ', (answer) => {
+function generateConfidenceTable(sprintIterations) {
+	const confidenceTable = new Map();
+	for (value of sprintIterations) {
+		previousValue = confidenceTable.get(value);
+		confidenceTable.set(value, previousValue != null ? previousValue + 1 : 1);
+	}
+	return confidenceTable;
+}
 
-    rl.question('What is the sprint alocation (from 0 to 1)? ', (sprintAllocation) => {
-        // Run thousands of sprints simulations
-        answer = Number(answer) + (answer * (NEW_TASK_EVERY_10 / 10));
-        for (i = 0; i < MAX; i++) {
-            storyPoints = answer;
-            sprintIterations = 0;
-            while (storyPoints > 0) {
-                storyPoints = storyPoints - (sprintAllocation * (historicStoriesPerSprint[Math.floor(Math.random() * historicStoriesPerSprint.length)]));
-                sprintIterations++;
-            }
-            sprintIterationsFinal.push(sprintIterations);
-        }
-        sprintIterationsFinal.sort();
+function generateCumulativeTable(confidenceTable) {
+	cumulative = 0;
+	cumulativeTable = new Map();
+	confidenceTable.forEach(function (value, key) {
+		cumulative += value;
+		cumulativeTable.set(key, cumulative);
+	});
+	return cumulativeTable;
+}
 
-        // Generates Confidence Table
-        confidenceTable = new Map();
-        for (value of sprintIterationsFinal) {
-            previousValue = confidenceTable.get(value);
-            confidenceTable.set(value, previousValue != null ? previousValue + 1 : 1);
-        }
+function printCumulativeTable(cumulativeTable) {
+	console.log("Sprint\t\tTotal\t| Percentage of Confidence of finishing project");
+	cumulativeTable.forEach(function (value, key) {
+		console.log(key + "\t=\t" + value + "\t| " + (value / MAX_ROUNDS) * 100 + "%");
+	});
+}
 
-        // Generate Cumulative Percentages
-        cumulative = 0;
-        confidenceTable.forEach(function (value, key) {
-            cumulative += value;
-            console.log(key + '\t=\t' + value + '\t| ' + (cumulative / MAX) * 100 + '%');
-        });
+function runSprints(targetNumberOfStories, historicStoryPointsPerSprint, sprintAllocation) {
+	const sprintIterations = [];
+	for (i = 0; i < MAX_ROUNDS; i++) {
+		sprintIterations.push(
+			simulateSprint(targetNumberOfStories, historicStoryPointsPerSprint, sprintAllocation)
+		);
+	}
+	sprintIterations.sort();
+	return sprintIterations;
+}
 
-        rl.close();
-    });
+function readSprintsHistory() {
+	const historicStoriesPerSprint = [];
+	fs.createReadStream("sprints.csv")
+		.pipe(csv())
+		.on("data", (row) => {
+			historicStoriesPerSprint.push(row["completed_story_points"]);
+		});
+	return historicStoriesPerSprint;
+}
 
+async function main() {
+	const questions = [
+		{
+			message: "What is the target number of story points for the project? ",
+		},
+		{
+			message:
+				"What is the percentage of story points for this project over the entire sprint (from 0 to 1)? ",
+		},
+	];
+	const historicStoryPointsPerSprint = readSprintsHistory();
+	const prompt1 = new NumberPrompt(questions[0]);
+	const prompt2 = new NumberPrompt(questions[1]);
+	prompt1.run().then((targetNumberOfStories) => {
+		prompt2.run().then((sprintAllocation) => {
+			sprintAllocation = sprintAllocation <= 0 || sprintAllocation > 1 ? 1 : sprintAllocation;
+			sprintAllocation = sprintAllocation + sprintAllocation * (NEW_TASK_EVERY_10 / 10);
+			const finalResult = runSprints(
+				targetNumberOfStories,
+				historicStoryPointsPerSprint,
+				sprintAllocation
+			);
+			const confidenceTable = generateConfidenceTable(finalResult);
+			const cumulativeTable = generateCumulativeTable(confidenceTable);
+			printCumulativeTable(cumulativeTable);
+		});
+	});
+}
 
-
-
-
-});
-
+main();
