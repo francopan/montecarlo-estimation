@@ -1,4 +1,4 @@
-# Montecarlo Estimation
+# Montecarlo Estimation (Number of sprints to finish a project)
 
 This program uses historic data from recent sprints to estimate how many sprints it will take to complete a project.
 
