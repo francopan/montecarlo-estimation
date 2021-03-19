@@ -83,7 +83,7 @@ async function main() {
 	prompt1.run().then((targetNumberOfStories) => {
 		prompt2.run().then((sprintAllocation) => {
 			sprintAllocation = sprintAllocation <= 0 || sprintAllocation > 1 ? 1 : sprintAllocation;
-			sprintAllocation = sprintAllocation + sprintAllocation * (NEW_TASK_EVERY_10 / 10);
+			targetNumberOfStories = targetNumberOfStories + targetNumberOfStories * (NEW_TASK_EVERY_10 / 10);
 			const finalResult = runSprints(
 				targetNumberOfStories,
 				historicStoryPointsPerSprint,
